@@ -15,7 +15,7 @@ class UserCreate(BaseModel):
     password: str
 
 class LoginRequest(BaseModel):
-    username: str
+    email: str
     password: str
 
 class Token(BaseModel):
@@ -63,9 +63,9 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
-@router.post("/login")
-def login(email: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
-    user = authenticate_user(db, email, password)
+@router.post("/login", response_model=Token)
+def login(credentials: LoginRequest, db: Session = Depends(get_db)):
+    user = authenticate_user(db, credentials.email, credentials.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
