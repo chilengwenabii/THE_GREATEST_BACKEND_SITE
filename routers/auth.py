@@ -64,8 +64,8 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/login")
-def login(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
-    user = authenticate_user(db, username, password)
+def login(email: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    user = authenticate_user(db, email, password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

@@ -34,7 +34,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 def authenticate_user(db: Session, username: str, password: str):
+    # First try to find by username
     user = db.query(User).filter(User.username == username).first()
+    if not user:
+        # If not found by username, try by email
+        user = db.query(User).filter(User.email == username).first()
     if not user:
         return False
     if not verify_password(password, user.hashed_password):
