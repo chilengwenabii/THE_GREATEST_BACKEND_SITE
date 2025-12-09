@@ -15,6 +15,21 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",  # Next.js dev server
+        "http://localhost:3001",  # Alternative dev port
+        "http://127.0.0.1:3000",  # Alternative localhost
+        "http://127.0.0.1:3001",  # Alternative localhost
+        "https://the-greatestsite-v4qt.vercel.app",  # Deployed frontend
+        "*",  # Allow all origins for testing
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",  # Next.js dev server
         "https://the-greatestsite-v4qt.vercel.app",  # Deployed frontend
     ],
     allow_credentials=True,
