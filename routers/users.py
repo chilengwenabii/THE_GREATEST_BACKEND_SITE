@@ -10,20 +10,20 @@ from datetime import datetime
 router = APIRouter()
 
 class UserUpdate(BaseModel):
-    username: str = None
-    email: str = None
-    full_name: str = None
-    phone: str = None
-    password: str = None
+    username: Optional[str] = None
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    password: Optional[str] = None
 
 class UserResponse(BaseModel):
     id: int
     username: str
     email: str
     full_name: str
-    phone: str = None
+    phone: Optional[str] = None
     is_online: bool
-    last_seen: datetime = None
+    last_seen: Optional[datetime] = None
 
 @router.get("/me", response_model=UserResponse)
 def get_current_user_info(current_user: User = Depends(get_current_user)):
