@@ -6,7 +6,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from database import get_db
-from models import User
+from models import FamilyMember
 import os
 from decouple import config
 
@@ -35,10 +35,10 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 def authenticate_user(db: Session, username: str, password: str):
     # First try to find by username
-    user = db.query(User).filter(User.username == username).first()
+    user = db.query(FamilyMember).filter(FamilyMember.username == username).first()
     if not user:
         # If not found by username, try by email
-        user = db.query(User).filter(User.email == username).first()
+        user = db.query(FamilyMember).filter(FamilyMember.email == username).first()
     if not user:
         return False
     if not verify_password(password, user.hashed_password):
@@ -58,10 +58,10 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    user = db.query(User).filter(User.username == username).first()
+    user = db.query(FamilyMember).filter(FamilyMember.username == username).first()
     if user is None:
         raise credentials_exception
     return user
 
 def get_user_count(db: Session):
-    return db.query(User).count()
+    return db.query(FamilyMember).count()

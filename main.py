@@ -1,12 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from database import engine, Base
-from models import User
+from database import engine, Base, test_supabase_connection
+from models import FamilyMember
 from auth import get_password_hash
 import os
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
+
+# Test Supabase connection on startup
+test_supabase_connection()
 
 app = FastAPI(title="The Greatest API", version="1.0.0")
 
@@ -45,10 +48,10 @@ def create_default_user():
     db = SessionLocal()
     try:
         # Check if default user exists
-        user = db.query(User).filter(User.username == "THE GREATEST").first()
+        user = db.query(FamilyMember).filter(FamilyMember.username == "THE GREATEST").first()
         if not user:
             hashed_password = get_password_hash("0769636386")
-            default_user = User(
+            default_user = FamilyMember(
                 username="THE GREATEST",
                 email="thegreatest@gmail.com",
                 full_name="The Greatest",

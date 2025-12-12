@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Form
 from sqlalchemy.orm import Session
 from datetime import timedelta
 from database import get_db
-from models import User
+from models import FamilyMember
 from auth import authenticate_user, create_access_token, get_password_hash, get_user_count
 from pydantic import BaseModel
 
@@ -15,7 +15,7 @@ class UserCreate(BaseModel):
     password: str
 
 class LoginRequest(BaseModel):
-    email: str
+    username: str
     password: str
 
 class Token(BaseModel):

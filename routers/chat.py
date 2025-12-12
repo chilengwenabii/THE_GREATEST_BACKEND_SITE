@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
-from models import User, Conversation, Message
+from models import FamilyMember, Conversation, Message
 from auth import get_current_user
 from pydantic import BaseModel
 from typing import List
@@ -40,7 +40,7 @@ class ConversationResponse(BaseModel):
 def create_conversation(
     conv: ConversationCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: FamilyMember = Depends(get_current_user)
 ):
     # Create conversation
     db_conv = Conversation(title=conv.title)
@@ -51,7 +51,7 @@ def create_conversation(
     # Add participants
     participants = []
     for user_id in conv.participant_ids:
-        user = db.query(User).filter(User.id == user_id).first()
+        user = db.query(FamilyMember).filter(FamilyMember.id == user_id).first()
         if user:
             participants.append(user)
 
@@ -71,7 +71,7 @@ def create_conversation(
 @router.get("/conversations", response_model=List[ConversationResponse])
 def get_conversations(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: FamilyMember = Depends(get_current_user)
 ):
     conversations = db.query(Conversation).filter(
         Conversation.participants.any(id=current_user.id)
@@ -107,7 +107,7 @@ def get_conversations(
 def send_message(
     msg: MessageCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: FamilyMember = Depends(get_current_user)
 ):
     # Check if conversation exists and user is participant
     conv = db.query(Conversation).filter(Conversation.id == msg.conversation_id).first()
@@ -148,7 +148,7 @@ def send_message(
 def get_messages(
     conversation_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: FamilyMember = Depends(get_current_user)
 ):
     # Check if conversation exists and user is participant
     conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()

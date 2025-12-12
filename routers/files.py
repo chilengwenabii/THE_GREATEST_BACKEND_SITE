@@ -7,7 +7,7 @@ from datetime import datetime
 from database import get_db
 from models import File as FileModel
 from auth import get_current_user
-from models import User
+from models import FamilyMember
 
 router = APIRouter()
 
@@ -18,7 +18,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 def upload_file(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: FamilyMember = Depends(get_current_user)
 ):
     # Validate file size (max 10MB)
     file.file.seek(0, 2)
@@ -61,7 +61,7 @@ def upload_file(
 @router.get("/files")
 def get_files(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: FamilyMember = Depends(get_current_user)
 ):
     files = db.query(FileModel).filter(FileModel.uploaded_by == current_user.id).all()
     return [
@@ -80,7 +80,7 @@ def get_files(
 def download_file(
     file_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: FamilyMember = Depends(get_current_user)
 ):
     file = db.query(FileModel).filter(FileModel.id == file_id).first()
     if not file:
