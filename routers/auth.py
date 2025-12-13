@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Form
-from sqlalchemy.orm import Session
 from datetime import timedelta
-from database import get_db
+from database import get_supabase_client
 from models import FamilyMember
 from auth import authenticate_user, create_access_token, get_password_hash, get_user_count
 from pydantic import BaseModel
@@ -26,54 +25,91 @@ class TokenData(BaseModel):
     username: str | None = None
 
 @router.post("/register", response_model=Token)
-def register(user: UserCreate, db: Session = Depends(get_db)):
+def register(user: UserCreate):
+    supabase = get_supabase_client()
+
     # Check if user limit reached (15 users)
-    user_count = get_user_count(db)
+    user_count = get_user_count()
     if user_count >= 15:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User limit reached. No more registrations allowed."
         )
 
-    # Check if user already exists
-    db_user = db.query(User).filter(User.username == user.username).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="Username already registered")
+    try:
+        # Check if user already exists
+        response = supabase.table('family_members').select('*').eq('username', user.username).execute()
+        if response.data:
+            raise HTTPException(status_code=400, detail="Username already registered")
 
-    db_user = db.query(User).filter(User.email == user.email).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        response = supabase.table('family_members').select('*').eq('email', user.email).execute()
+        if response.data:
+            raise HTTPException(status_code=400, detail="Email already registered")
 
-    # Create new user
-    hashed_password = get_password_hash(user.password)
-    db_user = User(
-        username=user.username,
-        email=user.email,
-        full_name=user.full_name,
-        hashed_password=hashed_password
-    )
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
+        # Create new user
+        password_hash = get_password_hash(user.password)
+        user_data = {
+            "username": user.username,
+            "email": user.email,
+            "full_name": user.full_name,
+            "password_hash": password_hash,
+            "role": "user",
+            "is_active": True,
+            "is_online": False
+        }
 
-    # Create access token
-    access_token_expires = timedelta(minutes=30)
-    access_token = create_access_token(
-        data={"sub": db_user.username}, expires_delta=access_token_expires
-    )
-    return {"access_token": access_token, "token_type": "bearer"}
+        response = supabase.table('family_members').insert(user_data).execute()
+        new_user = response.data[0]
+
+        # Create access token
+        access_token_expires = timedelta(minutes=30)
+        access_token = create_access_token(
+            data={"sub": new_user['username']}, expires_delta=access_token_expires
+        )
+        return {"access_token": access_token, "token_type": "bearer"}
+
+    except Exception as e:
+        print(f"Error registering user: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/login", response_model=Token)
-def login(credentials: LoginRequest, db: Session = Depends(get_db)):
-    user = authenticate_user(db, credentials.username, credentials.password)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
+def login(credentials: LoginRequest):
+    supabase = get_supabase_client()
+
+    try:
+        # Try to find user by username or email (case-insensitive)
+        response = supabase.table('family_members').select('*').ilike('username', credentials.username).execute()
+        user_data = response.data
+
+        if not user_data:
+            response = supabase.table('family_members').select('*').ilike('email', credentials.username).execute()
+            user_data = response.data
+
+        if not user_data:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect username or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        user = user_data[0]
+
+        # Verify password
+        if not get_password_hash.verify(credentials.password, user['password_hash']):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect username or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        access_token_expires = timedelta(minutes=30)
+        access_token = create_access_token(
+            data={"sub": user['username']}, expires_delta=access_token_expires
         )
-    access_token_expires = timedelta(minutes=30)
-    access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
-    )
-    return {"access_token": access_token, "token_type": "bearer"}
+        return {"access_token": access_token, "token_type": "bearer"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error logging in user: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")

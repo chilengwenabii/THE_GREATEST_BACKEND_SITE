@@ -1,83 +1,143 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean, Table
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
-from database import Base
+from pydantic import BaseModel
+from typing import Optional
+from datetime import datetime
 
-# Association table for many-to-many relationship between family_members and conversations
-family_member_conversations = Table('family_member_conversations', Base.metadata,
-    Column('family_member_id', Integer, ForeignKey('family_members.id'), primary_key=True),
-    Column('conversation_id', Integer, ForeignKey('conversations.id'), primary_key=True)
-)
+# Pydantic models for Supabase data operations
 
-class FamilyMember(Base):
-    __tablename__ = "family_members"
+class TaskBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+    status: str = "pending"
+    assigned_to: Optional[int] = None
+    created_by: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True)
-    email = Column(String, unique=True, index=True)
-    full_name = Column(String)
-    phone = Column(String, nullable=True)
-    hashed_password = Column(String)
-    is_active = Column(Boolean, default=True)
-    is_online = Column(Boolean, default=False)
-    last_seen = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+class TaskCreate(TaskBase):
+    pass
 
-    # Relationships
-    conversations = relationship("Conversation", secondary=family_member_conversations, back_populates="participants")
-    messages = relationship("Message", back_populates="sender")
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    assigned_to: Optional[int] = None
 
-class Conversation(Base):
-    __tablename__ = "conversations"
+class Task(TaskBase):
+    id: int
 
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+class FamilyMemberBase(BaseModel):
+    username: str
+    email: str
+    full_name: str
+    phone: Optional[str] = None
+    password_hash: str
+    role: str = "user"
+    is_active: bool = True
+    is_online: bool = False
+    last_seen: Optional[datetime] = None
+    created_at: Optional[datetime] = None
 
-    # Relationships
-    participants = relationship("FamilyMember", secondary=family_member_conversations, back_populates="conversations")
-    messages = relationship("Message", back_populates="conversation")
+class FamilyMemberCreate(FamilyMemberBase):
+    pass
 
-class Message(Base):
-    __tablename__ = "messages"
+class FamilyMemberUpdate(BaseModel):
+    username: Optional[str] = None
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    password: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+    is_online: Optional[bool] = None
+    last_seen: Optional[datetime] = None
 
-    id = Column(Integer, primary_key=True, index=True)
-    content = Column(Text)
-    message_type = Column(String, default="text")  # text, image, file, etc.
-    file_url = Column(String, nullable=True)
-    sender_id = Column(Integer, ForeignKey("family_members.id"))
-    conversation_id = Column(Integer, ForeignKey("conversations.id"))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+class FamilyMember(FamilyMemberBase):
+    id: int
 
-    # Relationships
-    sender = relationship("FamilyMember", back_populates="messages")
-    conversation = relationship("Conversation", back_populates="messages")
+class ConversationBase(BaseModel):
+    title: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
-class File(Base):
-    __tablename__ = "files"
+class ConversationCreate(ConversationBase):
+    pass
 
-    id = Column(Integer, primary_key=True, index=True)
-    filename = Column(String)
-    file_path = Column(String)
-    file_size = Column(Integer)
-    content_type = Column(String)
-    uploaded_by = Column(Integer, ForeignKey("family_members.id"))
-    uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
+class ConversationUpdate(BaseModel):
+    title: Optional[str] = None
 
-    # Relationships
-    uploader = relationship("FamilyMember")
+class Conversation(ConversationBase):
+    id: int
 
-class Project(Base):
-    __tablename__ = "projects"
+class MessageBase(BaseModel):
+    content: str
+    message_type: str = "text"
+    file_url: Optional[str] = None
+    sender_id: int
+    conversation_id: int
+    created_at: Optional[datetime] = None
 
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, nullable=False)
-    description = Column(Text)
-    status = Column(String, default="active")  # active, completed, paused
-    created_by = Column(Integer, ForeignKey("family_members.id"))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+class MessageCreate(MessageBase):
+    pass
 
-    # Relationships
-    creator = relationship("FamilyMember")
+class MessageUpdate(BaseModel):
+    content: Optional[str] = None
+    message_type: Optional[str] = None
+    file_url: Optional[str] = None
+
+class Message(MessageBase):
+    id: int
+
+class FileBase(BaseModel):
+    filename: str
+    file_path: str
+    file_size: int
+    content_type: str
+    uploaded_by: int
+    uploaded_at: Optional[datetime] = None
+
+class FileCreate(FileBase):
+    pass
+
+class FileUpdate(BaseModel):
+    filename: Optional[str] = None
+    file_path: Optional[str] = None
+    file_size: Optional[int] = None
+    content_type: Optional[str] = None
+
+class File(FileBase):
+    id: int
+
+class ProjectBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+    status: str = "active"
+    created_by: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+class ProjectCreate(ProjectBase):
+    pass
+
+class ProjectUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+
+class Project(ProjectBase):
+    id: int
+
+class AnnouncementBase(BaseModel):
+    title: str
+    content: str
+    created_by: int
+    created_at: Optional[datetime] = None
+
+class AnnouncementCreate(AnnouncementBase):
+    pass
+
+class AnnouncementUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+
+class Announcement(AnnouncementBase):
+    id: int

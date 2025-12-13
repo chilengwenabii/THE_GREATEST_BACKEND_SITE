@@ -4,8 +4,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
-from database import get_db
+from database import get_supabase_client
 from models import FamilyMember
 import os
 from decouple import config
@@ -17,8 +16,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+def verify_password(plain_password, password_hash):
+    return pwd_context.verify(plain_password, password_hash)
 
 def get_password_hash(password):
     return pwd_context.hash(password)
@@ -34,18 +33,19 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 def authenticate_user(db: Session, username: str, password: str):
-    # First try to find by username
-    user = db.query(FamilyMember).filter(FamilyMember.username == username).first()
+    from sqlalchemy import func
+    # First try to find by username (case-insensitive)
+    user = db.query(FamilyMember).filter(func.lower(FamilyMember.username) == username.lower()).first()
     if not user:
-        # If not found by username, try by email
-        user = db.query(FamilyMember).filter(FamilyMember.email == username).first()
+        # If not found by username, try by email (case-insensitive)
+        user = db.query(FamilyMember).filter(func.lower(FamilyMember.email) == username.lower()).first()
     if not user:
         return False
-    if not verify_password(password, user.hashed_password):
+    if not verify_password(password, user.password_hash):
         return False
     return user
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -58,10 +58,30 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    user = db.query(FamilyMember).filter(FamilyMember.username == username).first()
-    if user is None:
-        raise credentials_exception
-    return user
 
-def get_user_count(db: Session):
-    return db.query(FamilyMember).count()
+    supabase = get_supabase_client()
+    try:
+        response = supabase.table('family_members').select('*').eq('username', username).execute()
+        user_data = response.data
+
+        if not user_data:
+            raise credentials_exception
+
+        return FamilyMember(**user_data[0])
+    except Exception as e:
+        print(f"Error getting current user: {e}")
+        raise credentials_exception
+
+def get_user_count():
+    supabase = get_supabase_client()
+    try:
+        response = supabase.table('family_members').select('*', count='exact').execute()
+        return response.count
+    except Exception as e:
+        print(f"Error getting user count: {e}")
+        return 0
+
+def get_current_admin(current_user: FamilyMember = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    return current_user

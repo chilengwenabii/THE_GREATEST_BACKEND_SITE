@@ -1,12 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from database import engine, Base, test_supabase_connection
+from database import test_supabase_connection, get_supabase_client
 from models import FamilyMember
 from auth import get_password_hash
 import os
-
-# Create database tables
-Base.metadata.create_all(bind=engine)
 
 # Test Supabase connection on startup
 test_supabase_connection()
@@ -42,40 +39,43 @@ app.add_middleware(
 
 # Pre-create default user
 def create_default_user():
-    from sqlalchemy.orm import sessionmaker
-    from database import SessionLocal
-
-    db = SessionLocal()
+    supabase = get_supabase_client()
     try:
         # Check if default user exists
-        user = db.query(FamilyMember).filter(FamilyMember.username == "THE GREATEST").first()
-        if not user:
-            hashed_password = get_password_hash("0769636386")
-            default_user = FamilyMember(
-                username="THE GREATEST",
-                email="thegreatest@gmail.com",
-                full_name="The Greatest",
-                hashed_password=hashed_password
-            )
-            db.add(default_user)
-            db.commit()
+        response = supabase.table('family_members').select('*').eq('username', 'THE GREATEST').execute()
+        user_data = response.data
+
+        if not user_data:
+            password_hash = get_password_hash("0769636386")
+            default_user_data = {
+                "username": "THE GREATEST",
+                "email": "thegreatest@gmail.com",
+                "full_name": "The Greatest",
+                "password_hash": password_hash,
+                "role": "admin",
+                "is_active": True,
+                "is_online": False
+            }
+            supabase.table('family_members').insert(default_user_data).execute()
             print("Default user 'THE GREATEST' created.")
         else:
             print("Default user already exists.")
-    finally:
-        db.close()
+    except Exception as e:
+        print(f"Error creating default user: {e}")
 
 # Create default user on startup
 create_default_user()
 
 # Include routers
-from routers import auth, chat, files, projects, users
+from routers import auth, chat, files, projects, users, tasks, announcements
 
 app.include_router(auth.router, prefix="/auth", tags=["authentication"])
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(files.router, prefix="/files", tags=["files"])
 app.include_router(projects.router, prefix="/projects", tags=["projects"])
 app.include_router(users.router, prefix="/users", tags=["users"])
+app.include_router(tasks.router, prefix="/tasks", tags=["tasks"])
+app.include_router(announcements.router, prefix="/announcements", tags=["announcements"])
 
 @app.get("/")
 def read_root():
