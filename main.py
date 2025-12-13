@@ -19,18 +19,6 @@ app.add_middleware(
         "http://127.0.0.1:3000",  # Alternative localhost
         "http://127.0.0.1:3001",  # Alternative localhost
         "https://the-greatestsite-v4qt.vercel.app",  # Deployed frontend
-        "*",  # Allow all origins for testing
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # Next.js dev server
-        "https://the-greatestsite-v4qt.vercel.app",  # Deployed frontend
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -42,7 +30,7 @@ def create_default_user():
     supabase = get_supabase_client()
     try:
         # Check if default user exists
-        response = supabase.table('family_members').select('*').eq('username', 'THE GREATEST').execute()
+        response = supabase.table('family_members').select('*').eq('email', 'thegreatest@gmail.com').execute()
         user_data = response.data
 
         if not user_data:
@@ -67,7 +55,7 @@ def create_default_user():
 create_default_user()
 
 # Include routers
-from routers import auth, chat, files, projects, users, tasks, announcements
+from routers import auth, chat, files, projects, users, tasks, announcements, admin
 
 app.include_router(auth.router, prefix="/auth", tags=["authentication"])
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
