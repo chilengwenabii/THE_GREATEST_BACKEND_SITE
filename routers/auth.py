@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Form
 from datetime import timedelta
 from database import get_supabase_client
 from models import FamilyMember
-from auth import authenticate_user, create_access_token, get_password_hash, get_user_count, verify_password
+from auth import create_access_token, get_password_hash, get_user_count, verify_password
 from pydantic import BaseModel
 
 router = APIRouter()
