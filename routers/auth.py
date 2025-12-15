@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Form
 from datetime import timedelta
 from database import get_supabase_client
 from models import FamilyMember
-from auth import authenticate_user, create_access_token, get_password_hash, get_user_count
+from auth import authenticate_user, create_access_token, get_password_hash, get_user_count, verify_password
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -95,7 +95,7 @@ def login(credentials: LoginRequest):
         user = user_data[0]
 
         # Verify password
-        if not get_password_hash.verify(credentials.password, user['password_hash']):
+        if not verify_password(credentials.password, user['password_hash']):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect username or password",
