@@ -11,26 +11,26 @@ router = APIRouter()
 
 class ConversationCreate(BaseModel):
     title: str | None = None
-    participant_ids: List[int]
+    participant_ids: List[str]
 
 class MessageCreate(BaseModel):
     content: str
-    conversation_id: int
+    conversation_id: str
     message_type: str = "text"
     file_url: str | None = None
 
 class MessageResponse(BaseModel):
-    id: int
+    id: str
     content: str
     message_type: str
     file_url: str | None
-    sender_id: int
+    sender_id: str
     sender_username: str
-    conversation_id: int
+    conversation_id: str
     created_at: str
 
 class ConversationResponse(BaseModel):
-    id: int
+    id: str
     title: str | None
     participants: List[dict]
     messages: List[MessageResponse]
@@ -185,7 +185,7 @@ def send_message(
 
 @router.get("/conversations/{conversation_id}/messages", response_model=List[MessageResponse])
 def get_messages(
-    conversation_id: int,
+    conversation_id: str,
     supabase: Client = Depends(get_db),
     current_user: FamilyMember = Depends(get_current_user)
 ):

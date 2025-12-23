@@ -50,7 +50,7 @@ def upload_file(
     db.refresh(db_file)
 
     return {
-        "id": db_file.id,
+        "id": str(db_file.id),
         "filename": db_file.filename,
         "file_path": db_file.file_path,
         "file_size": db_file.file_size,
@@ -66,7 +66,7 @@ def get_files(
     files = db.query(FileModel).filter(FileModel.uploaded_by == current_user.id).all()
     return [
         {
-            "id": f.id,
+            "id": str(f.id),
             "filename": f.filename,
             "file_path": f.file_path,
             "file_size": f.file_size,

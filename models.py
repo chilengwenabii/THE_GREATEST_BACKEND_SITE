@@ -23,19 +23,21 @@ class TaskUpdate(BaseModel):
     assigned_to: Optional[int] = None
 
 class Task(TaskBase):
-    id: int
+    id: str
 
 class FamilyMemberBase(BaseModel):
     username: str
     email: str
     full_name: str
-    phone: Optional[str] = None
     password_hash: str
     role: str = "user"
+    avatar_url: Optional[str] = None
+    status: str = "active"
     is_active: bool = True
     is_online: bool = False
     last_seen: Optional[datetime] = None
     created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 class FamilyMemberCreate(FamilyMemberBase):
     pass
@@ -52,7 +54,7 @@ class FamilyMemberUpdate(BaseModel):
     last_seen: Optional[datetime] = None
 
 class FamilyMember(FamilyMemberBase):
-    id: int
+    id: str
 
 class ConversationBase(BaseModel):
     title: Optional[str] = None
@@ -66,7 +68,7 @@ class ConversationUpdate(BaseModel):
     title: Optional[str] = None
 
 class Conversation(ConversationBase):
-    id: int
+    id: str
 
 class MessageBase(BaseModel):
     content: str
@@ -85,7 +87,7 @@ class MessageUpdate(BaseModel):
     file_url: Optional[str] = None
 
 class Message(MessageBase):
-    id: int
+    id: str
 
 class FileBase(BaseModel):
     filename: str
@@ -124,7 +126,7 @@ class ProjectUpdate(BaseModel):
     status: Optional[str] = None
 
 class Project(ProjectBase):
-    id: int
+    id: str
 
 class AnnouncementBase(BaseModel):
     title: str
@@ -140,4 +142,4 @@ class AnnouncementUpdate(BaseModel):
     content: Optional[str] = None
 
 class Announcement(AnnouncementBase):
-    id: int
+    id: str

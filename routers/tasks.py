@@ -108,7 +108,7 @@ def create_task(
 
 @router.put("/{task_id}", response_model=TaskResponse)
 def update_task(
-    task_id: int,
+    task_id: str,
     task_update: TaskUpdate,
     current_admin: FamilyMember = Depends(get_current_admin),
     db: Session = Depends(get_db)
@@ -151,7 +151,7 @@ def update_task(
 
 @router.delete("/{task_id}")
 def delete_task(
-    task_id: int,
+    task_id: str,
     current_admin: FamilyMember = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):

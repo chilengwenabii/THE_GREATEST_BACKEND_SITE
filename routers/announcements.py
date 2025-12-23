@@ -106,7 +106,7 @@ def update_announcement(
 
 @router.delete("/{announcement_id}")
 def delete_announcement(
-    announcement_id: int,
+    announcement_id: str,
     current_admin: FamilyMember = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):

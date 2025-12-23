@@ -58,7 +58,7 @@ def get_role_requests(current_admin: FamilyMember = Depends(get_current_admin)):
 
 @router.put("/role-requests/{request_id}")
 def update_role_request(
-    request_id: int,
+    request_id: str,
     update_data: RoleRequestUpdate,
     current_admin: FamilyMember = Depends(get_current_admin)
 ):
@@ -103,7 +103,7 @@ def get_deleted_projects(current_admin: FamilyMember = Depends(get_current_admin
 
 @router.delete("/projects/{project_id}")
 def soft_delete_project(
-    project_id: int,
+    project_id: str,
     current_admin: FamilyMember = Depends(get_current_admin)
 ):
     supabase = get_supabase_client()
@@ -139,7 +139,7 @@ def soft_delete_project(
 
 @router.post("/projects/{project_id}/restore")
 def restore_project(
-    project_id: int,
+    project_id: str,
     current_admin: FamilyMember = Depends(get_current_admin)
 ):
     supabase = get_supabase_client()

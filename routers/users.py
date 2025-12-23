@@ -16,11 +16,12 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
 
 class UserResponse(BaseModel):
-    id: int
+    id: str
     username: str
     email: str
     full_name: str
     phone: Optional[str] = None
+    role: str
     is_online: bool
     last_seen: Optional[datetime] = None
 
@@ -107,7 +108,7 @@ class UserCreate(BaseModel):
     role: Optional[str] = "user"
 
 class UserAdminResponse(BaseModel):
-    id: int
+    id: str
     username: str
     email: str
     full_name: str
@@ -165,7 +166,7 @@ def create_user(user: UserCreate, current_admin: FamilyMember = Depends(get_curr
 
 @router.put("/{user_id}", response_model=UserAdminResponse)
 def update_user(
-    user_id: int,
+    user_id: str,
     user_update: UserUpdate,
     current_admin: FamilyMember = Depends(get_current_admin)
 ):
@@ -209,7 +210,7 @@ def update_user(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.delete("/{user_id}")
-def delete_user(user_id: int, current_admin: FamilyMember = Depends(get_current_admin)):
+def delete_user(user_id: str, current_admin: FamilyMember = Depends(get_current_admin)):
     supabase = get_supabase_client()
 
     try:
