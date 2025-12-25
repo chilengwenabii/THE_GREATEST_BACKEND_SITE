@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Form
 from datetime import timedelta
-from database import get_supabase_client
+from database import get_db_connection
 from models import FamilyMember
-from auth import create_access_token, get_password_hash, get_user_count, verify_password
+from auth import create_access_token, get_password_hash, verify_password
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -12,6 +12,7 @@ class UserCreate(BaseModel):
     email: str
     full_name: str
     password: str
+    role: str = "user"
 
 class LoginRequest(BaseModel):
     username: str
@@ -24,75 +25,89 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     username: str | None = None
 
-@router.post("/register", response_model=Token)
+@router.post("/register")
 def register(user: UserCreate):
-    supabase = get_supabase_client()
-
-    # Check if user limit reached (15 users)
-    user_count = get_user_count()
-    if user_count >= 15:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User limit reached. No more registrations allowed."
-        )
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
     try:
         # Check if user already exists
-        response = supabase.table('family_members').select('*').eq('username', user.username).execute()
-        if response.data:
+        cursor.execute("SELECT id FROM family_members WHERE username = ?", (user.username,))
+        if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Username already registered")
 
-        response = supabase.table('family_members').select('*').eq('email', user.email).execute()
-        if response.data:
+        cursor.execute("SELECT id FROM family_members WHERE email = ?", (user.email,))
+        if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Email already registered")
 
         # Create new user
         password_hash = get_password_hash(user.password)
-        user_data = {
-            "username": user.username,
-            "email": user.email,
-            "full_name": user.full_name,
-            "password_hash": password_hash,
-            "role": "user",
-            "is_active": True,
-            "is_online": False
-        }
+        user_data = (
+            user.username,
+            user.email,
+            user.full_name,
+            password_hash,
+            user.role,
+            "active",  # status
+            None,      # avatar_url
+            1,         # is_active
+            0,         # is_online
+            None       # last_seen
+        )
 
-        response = supabase.table('family_members').insert(user_data).execute()
-        new_user = response.data[0]
+        cursor.execute("""
+            INSERT INTO family_members
+            (username, email, full_name, password_hash, role, status, avatar_url, is_active, is_online, last_seen)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, user_data)
+
+        user_id = cursor.lastrowid
+        conn.commit()
 
         # Create access token
         access_token_expires = timedelta(minutes=30)
         access_token = create_access_token(
-            data={"sub": new_user['username']}, expires_delta=access_token_expires
+            data={"sub": user.username}, expires_delta=access_token_expires
         )
-        return {"access_token": access_token, "token_type": "bearer"}
+        return {
+            "message": "User registered successfully to SQLite",
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user_id": user_id
+        }
 
     except Exception as e:
         print(f"Error registering user: {e}")
+        conn.rollback()
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        conn.close()
 
 @router.post("/login", response_model=Token)
 def login(credentials: LoginRequest):
-    supabase = get_supabase_client()
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
     try:
         # Try to find user by username or email (case-insensitive)
-        response = supabase.table('family_members').select('*').ilike('username', credentials.username).execute()
-        user_data = response.data
+        cursor.execute("SELECT * FROM family_members WHERE LOWER(username) = LOWER(?)", (credentials.username,))
+        user_row = cursor.fetchone()
 
-        if not user_data:
-            response = supabase.table('family_members').select('*').ilike('email', credentials.username).execute()
-            user_data = response.data
+        if not user_row:
+            cursor.execute("SELECT * FROM family_members WHERE LOWER(email) = LOWER(?)", (credentials.username,))
+            user_row = cursor.fetchone()
 
-        if not user_data:
+        if not user_row:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect username or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        user = user_data[0]
+        # Convert row to dict for compatibility
+        user = dict(user_row)
 
         # Verify password
         if not verify_password(credentials.password, user['password_hash']):
@@ -113,3 +128,5 @@ def login(credentials: LoginRequest):
     except Exception as e:
         print(f"Error logging in user: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        conn.close()

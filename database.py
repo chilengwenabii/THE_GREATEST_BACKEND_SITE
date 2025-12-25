@@ -1,36 +1,39 @@
-from supabase import create_client, Client
-from decouple import config
+import sqlite3
+import os
+from typing import Optional
 
-# Supabase client configuration
-SUPABASE_URL = "https://ppesvgdduwalpnqireaz.supabase.co"
-SUPABASE_ANON_KEY = "sb_publishable_iKJ3BhovbnmrelVo9ZXt5w_6keSbuLq"
+# SQLite database configuration
+DATABASE_PATH = os.path.join(os.path.dirname(__file__), 'the_greatest.db')
 
-supabase: Client = None
-try:
-    supabase = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-    print("Supabase client initialized successfully")
-except Exception as e:
-    print(f"Failed to initialize Supabase client: {e}")
-    supabase = None
-
-def test_supabase_connection():
-    if not supabase:
-        print("Supabase not configured")
-        return
-
+def get_db_connection():
+    """Get a SQLite database connection"""
     try:
-        # Test connection by fetching user count or a simple query
-        response = supabase.table('family_members').select('*', count='exact').limit(1).execute()
-        print("Successfully connected to Supabase")
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row  # Enable column access by name
+        return conn
     except Exception as e:
-        print(f"Failed to connect to Supabase: {e}")
+        print(f"Failed to connect to SQLite database: {e}")
+        raise
 
-def get_supabase_client() -> Client:
-    """Get the Supabase client instance"""
-    if not supabase:
-        raise Exception("Supabase client not initialized")
-    return supabase
+def test_sqlite_connection():
+    """Test SQLite database connection"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM family_members")
+        count = cursor.fetchone()[0]
+        print(f"Successfully connected to SQLite database. Users count: {count}")
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Failed to connect to SQLite database: {e}")
+        return False
 
 def get_db():
-    """Get the Supabase client instance (for compatibility with existing routers)"""
-    return get_supabase_client()
+    """Get the database connection (for compatibility with existing routers)"""
+    return get_db_connection()
+
+# For backward compatibility
+def get_supabase_client():
+    """Backward compatibility function that returns SQLite connection"""
+    return get_db_connection()

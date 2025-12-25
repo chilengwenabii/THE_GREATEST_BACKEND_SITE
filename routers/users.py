@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from typing import Optional
-from database import get_supabase_client
+from database import get_db_connection
 from models import FamilyMember
 from auth import get_current_user, get_password_hash, get_current_admin
 from datetime import datetime
@@ -28,38 +28,47 @@ class UserResponse(BaseModel):
 @router.get("/me", response_model=UserResponse)
 def get_current_user_info(current_user: FamilyMember = Depends(get_current_user)):
     # Update online status
-    supabase = get_supabase_client()
+    conn = get_db_connection()
+    cursor = conn.cursor()
     try:
-        supabase.table('family_members').update({
-            'is_online': True,
-            'last_seen': datetime.utcnow().isoformat()
-        }).eq('id', current_user.id).execute()
+        cursor.execute("""
+            UPDATE family_members
+            SET is_online = 1, last_seen = ?
+            WHERE id = ?
+        """, (datetime.utcnow().isoformat(), current_user.id))
 
         # Return updated user data
-        response = supabase.table('family_members').select('*').eq('id', current_user.id).execute()
-        user_data = response.data[0]
-        return UserResponse(**user_data)
+        cursor.execute("SELECT * FROM family_members WHERE id = ?", (current_user.id,))
+        user_data = cursor.fetchone()
+        if not user_data:
+            raise HTTPException(status_code=404, detail="User not found")
+        conn.commit()
+        return UserResponse(**dict(user_data))
     except Exception as e:
         print(f"Error updating user online status: {e}")
+        conn.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        conn.close()
 
 @router.put("/me", response_model=UserResponse)
 def update_current_user(
     user_update: UserUpdate,
     current_user: FamilyMember = Depends(get_current_user)
 ):
-    supabase = get_supabase_client()
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
     try:
         # Check for unique constraints
         if user_update.username and user_update.username != current_user.username:
-            response = supabase.table('family_members').select('*').eq('username', user_update.username).execute()
-            if response.data:
+            cursor.execute("SELECT id FROM family_members WHERE username = ?", (user_update.username,))
+            if cursor.fetchone():
                 raise HTTPException(status_code=400, detail="Username already taken")
 
         if user_update.email and user_update.email != current_user.email:
-            response = supabase.table('family_members').select('*').eq('email', user_update.email).execute()
-            if response.data:
+            cursor.execute("SELECT id FROM family_members WHERE email = ?", (user_update.email,))
+            if cursor.fetchone():
                 raise HTTPException(status_code=400, detail="Email already taken")
 
         # Update fields
@@ -69,34 +78,59 @@ def update_current_user(
 
         update_data['last_seen'] = datetime.utcnow().isoformat()
 
-        supabase.table('family_members').update(update_data).eq('id', current_user.id).execute()
+        set_clause = ', '.join([f"{k} = ?" for k in update_data.keys()])
+        values = list(update_data.values()) + [current_user.id]
+        cursor.execute(f"UPDATE family_members SET {set_clause} WHERE id = ?", values)
 
         # Return updated user data
-        response = supabase.table('family_members').select('*').eq('id', current_user.id).execute()
-        user_data = response.data[0]
-        return UserResponse(**user_data)
+        cursor.execute("SELECT * FROM family_members WHERE id = ?", (current_user.id,))
+        user_data = cursor.fetchone()
+        if not user_data:
+            raise HTTPException(status_code=404, detail="User not found")
+        conn.commit()
+        return UserResponse(**dict(user_data))
 
     except HTTPException:
         raise
     except Exception as e:
         print(f"Error updating user: {e}")
+        conn.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        conn.close()
 
 @router.get("/online-count")
 def get_online_users_count():
-    supabase = get_supabase_client()
-    response = supabase.table('family_members').select('*').eq('is_online', True).execute()
-    online_count = len(response.data)
-    return {"online_users": online_count}
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT COUNT(*) FROM family_members WHERE is_online = 1")
+        online_count = cursor.fetchone()[0]
+        return {"online_users": online_count}
+    except Exception as e:
+        print(f"Error getting online count: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        conn.close()
 
 @router.post("/logout")
 def logout(current_user: FamilyMember = Depends(get_current_user)):
-    supabase = get_supabase_client()
-    supabase.table('family_members').update({
-        'is_online': False,
-        'last_seen': datetime.utcnow().isoformat()
-    }).eq('id', current_user.id).execute()
-    return {"message": "Logged out successfully"}
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            UPDATE family_members
+            SET is_online = 0, last_seen = ?
+            WHERE id = ?
+        """, (datetime.utcnow().isoformat(), current_user.id))
+        conn.commit()
+        return {"message": "Logged out successfully"}
+    except Exception as e:
+        print(f"Error logging out: {e}")
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        conn.close()
 
 # Admin CRUD endpoints
 class UserCreate(BaseModel):
@@ -121,48 +155,69 @@ class UserAdminResponse(BaseModel):
 
 @router.get("/", response_model=list[UserAdminResponse])
 def get_all_users(current_admin: FamilyMember = Depends(get_current_admin)):
-    supabase = get_supabase_client()
+    conn = get_db_connection()
+    cursor = conn.cursor()
     try:
-        response = supabase.table('family_members').select('*').execute()
-        return [UserAdminResponse(**user) for user in response.data]
+        cursor.execute("SELECT * FROM family_members")
+        users = cursor.fetchall()
+        return [UserAdminResponse(**dict(user)) for user in users]
     except Exception as e:
         print(f"Error getting all users: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        conn.close()
 
 @router.post("/", response_model=UserAdminResponse)
 def create_user(user: UserCreate, current_admin: FamilyMember = Depends(get_current_admin)):
-    supabase = get_supabase_client()
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
     try:
         # Check for unique constraints
-        response = supabase.table('family_members').select('*').eq('username', user.username).execute()
-        if response.data:
+        cursor.execute("SELECT id FROM family_members WHERE username = ?", (user.username,))
+        if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Username already taken")
 
-        response = supabase.table('family_members').select('*').eq('email', user.email).execute()
-        if response.data:
+        cursor.execute("SELECT id FROM family_members WHERE email = ?", (user.email,))
+        if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Email already taken")
 
         password_hash = get_password_hash(user.password)
-        user_data = {
-            "username": user.username,
-            "email": user.email,
-            "full_name": user.full_name,
-            "phone": user.phone,
-            "password_hash": password_hash,
-            "role": user.role,
-            "is_active": True,
-            "is_online": False
-        }
+        user_data = (
+            user.username,
+            user.email,
+            user.full_name,
+            password_hash,
+            user.role,
+            "active",  # status
+            None,      # avatar_url
+            1,         # is_active
+            0,         # is_online
+            None       # last_seen
+        )
 
-        response = supabase.table('family_members').insert(user_data).execute()
-        return UserAdminResponse(**response.data[0])
+        cursor.execute("""
+            INSERT INTO family_members
+            (username, email, full_name, password_hash, role, status, avatar_url, is_active, is_online, last_seen)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, user_data)
+
+        user_id = cursor.lastrowid
+        conn.commit()
+
+        # Return the created user
+        cursor.execute("SELECT * FROM family_members WHERE id = ?", (user_id,))
+        created_user = cursor.fetchone()
+        return UserAdminResponse(**dict(created_user))
 
     except HTTPException:
         raise
     except Exception as e:
         print(f"Error creating user: {e}")
+        conn.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        conn.close()
 
 @router.put("/{user_id}", response_model=UserAdminResponse)
 def update_user(
@@ -170,25 +225,27 @@ def update_user(
     user_update: UserUpdate,
     current_admin: FamilyMember = Depends(get_current_admin)
 ):
-    supabase = get_supabase_client()
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
     try:
         # Check if user exists
-        response = supabase.table('family_members').select('*').eq('id', user_id).execute()
-        if not response.data:
+        cursor.execute("SELECT * FROM family_members WHERE id = ?", (user_id,))
+        db_user = cursor.fetchone()
+        if not db_user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        db_user = response.data[0]
+        db_user = dict(db_user)
 
         # Check for unique constraints
         if user_update.username and user_update.username != db_user['username']:
-            response = supabase.table('family_members').select('*').eq('username', user_update.username).execute()
-            if response.data:
+            cursor.execute("SELECT id FROM family_members WHERE username = ?", (user_update.username,))
+            if cursor.fetchone():
                 raise HTTPException(status_code=400, detail="Username already taken")
 
         if user_update.email and user_update.email != db_user['email']:
-            response = supabase.table('family_members').select('*').eq('email', user_update.email).execute()
-            if response.data:
+            cursor.execute("SELECT id FROM family_members WHERE email = ?", (user_update.email,))
+            if cursor.fetchone():
                 raise HTTPException(status_code=400, detail="Email already taken")
 
         # Update fields
@@ -196,34 +253,46 @@ def update_user(
         if 'password' in update_data:
             update_data['password_hash'] = get_password_hash(update_data.pop('password'))
 
-        supabase.table('family_members').update(update_data).eq('id', user_id).execute()
+        if update_data:
+            set_clause = ', '.join([f"{k} = ?" for k in update_data.keys()])
+            values = list(update_data.values()) + [user_id]
+            cursor.execute(f"UPDATE family_members SET {set_clause} WHERE id = ?", values)
 
         # Return updated user data
-        response = supabase.table('family_members').select('*').eq('id', user_id).execute()
-        user_data = response.data[0]
-        return UserAdminResponse(**user_data)
+        cursor.execute("SELECT * FROM family_members WHERE id = ?", (user_id,))
+        user_data = cursor.fetchone()
+        conn.commit()
+        return UserAdminResponse(**dict(user_data))
 
     except HTTPException:
         raise
     except Exception as e:
         print(f"Error updating user: {e}")
+        conn.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        conn.close()
 
 @router.delete("/{user_id}")
 def delete_user(user_id: str, current_admin: FamilyMember = Depends(get_current_admin)):
-    supabase = get_supabase_client()
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
     try:
         # Check if user exists
-        response = supabase.table('family_members').select('*').eq('id', user_id).execute()
-        if not response.data:
+        cursor.execute("SELECT id FROM family_members WHERE id = ?", (user_id,))
+        if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="User not found")
 
-        supabase.table('family_members').delete().eq('id', user_id).execute()
+        cursor.execute("DELETE FROM family_members WHERE id = ?", (user_id,))
+        conn.commit()
         return {"message": "User deleted successfully"}
 
     except HTTPException:
         raise
     except Exception as e:
         print(f"Error deleting user: {e}")
+        conn.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        conn.close()
