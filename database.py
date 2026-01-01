@@ -1,20 +1,33 @@
 """
 SQLAlchemy Database Configuration
+Supports SQLite for local development and PostgreSQL for production (Render)
 """
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# SQLite database path
-DATABASE_PATH = os.path.join(os.path.dirname(__file__), 'the_greatest.db')
-SQLALCHEMY_DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
+# Check for DATABASE_URL (PostgreSQL on Render) first, fallback to SQLite
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# Create engine with SQLite-specific settings
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False}  # Needed for SQLite
-)
+if DATABASE_URL:
+    # Production: PostgreSQL on Render
+    # Render uses postgres:// but SQLAlchemy needs postgresql://
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+    print("✓ Using PostgreSQL database")
+else:
+    # Local development: SQLite
+    DATABASE_PATH = os.path.join(os.path.dirname(__file__), 'the_greatest.db')
+    SQLALCHEMY_DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
+    
+    engine = create_engine(
+        SQLALCHEMY_DATABASE_URL,
+        connect_args={"check_same_thread": False}  # Needed for SQLite
+    )
+    print("✓ Using SQLite database (local development)")
 
 # Session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
