@@ -1,171 +1,174 @@
 # Database Schema Documentation
 
-This document describes the current Supabase database schema with UUID primary keys.
+This document describes the SQLite database schema used with SQLAlchemy ORM.
 
 ## Table: family_members
 
 **Purpose**: Stores user account information and authentication data.
 
-**Columns**:
-- `id` UUID PRIMARY KEY - Unique identifier (auto-generated)
-- `username` CHARACTER VARYING - User's login username
-- `full_name` CHARACTER VARYING - User's full display name
-- `email` CHARACTER VARYING - User's email address
-- `password_hash` CHARACTER VARYING - Hashed password
-- `role` TEXT - User role (admin, user, animator, etc.)
-- `avatar_url` TEXT - Profile picture URL
-- `status` TEXT - Account status (active, inactive, etc.)
-- `created_at` TIMESTAMP WITH TIME ZONE - Account creation timestamp
-- `updated_at` TIMESTAMP WITH TIME ZONE - Last profile update timestamp
-- `is_active` BOOLEAN - Account activation status
-- `is_online` BOOLEAN - Current online status
-- `last_seen` TIMESTAMP WITH TIME ZONE - Last activity timestamp
-- `phone` CHARACTER VARYING - Optional phone number
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | INTEGER | PRIMARY KEY, AUTOINCREMENT | Unique identifier |
+| `username` | VARCHAR(100) | UNIQUE, NOT NULL, INDEX | User's login username |
+| `email` | VARCHAR(255) | UNIQUE, NOT NULL | User's email address |
+| `full_name` | VARCHAR(255) | NOT NULL | User's full display name |
+| `password_hash` | VARCHAR(255) | NOT NULL | Hashed password |
+| `role` | VARCHAR(50) | DEFAULT 'user' | User role (admin, user, animator) |
+| `avatar_url` | VARCHAR(255) | NULLABLE | Profile picture URL |
+| `status` | VARCHAR(20) | DEFAULT 'active' | Account status |
+| `phone` | VARCHAR(20) | NULLABLE | Phone number |
+| `is_active` | BOOLEAN | DEFAULT TRUE | Account activation status |
+| `is_online` | BOOLEAN | DEFAULT FALSE | Current online status |
+| `last_seen` | DATETIME | NULLABLE | Last activity timestamp |
+| `created_at` | DATETIME | DEFAULT NOW | Account creation timestamp |
+| `updated_at` | DATETIME | DEFAULT NOW, ON UPDATE | Last profile update timestamp |
 
 ## Table: conversations
 
 **Purpose**: Stores chat conversation metadata.
 
-**Columns**:
-- `id` SERIAL PRIMARY KEY - Auto-incrementing unique identifier
-- `title` VARCHAR(255) - Conversation title/name
-- `created_at` TIMESTAMP WITH TIME ZONE DEFAULT NOW() - Creation timestamp
-- `updated_at` TIMESTAMP WITH TIME ZONE DEFAULT NOW() - Last update timestamp
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | INTEGER | PRIMARY KEY, AUTOINCREMENT | Unique identifier |
+| `title` | VARCHAR(255) | NULLABLE | Conversation title/name |
+| `created_at` | DATETIME | DEFAULT NOW | Creation timestamp |
+| `updated_at` | DATETIME | DEFAULT NOW, ON UPDATE | Last update timestamp |
+
+## Table: conversation_participants
+
+**Purpose**: Many-to-many relationship between users and conversations.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | INTEGER | PRIMARY KEY, AUTOINCREMENT | Unique identifier |
+| `conversation_id` | INTEGER | FK → conversations.id, ON DELETE CASCADE | Parent conversation |
+| `user_id` | INTEGER | FK → family_members.id, ON DELETE CASCADE | Participant user |
 
 ## Table: messages
 
 **Purpose**: Stores individual chat messages.
 
-**Columns**:
-- `id` SERIAL PRIMARY KEY - Auto-incrementing unique identifier
-- `content` TEXT NOT NULL - Message content
-- `message_type` VARCHAR(50) DEFAULT 'text' - Type of message (text, file, etc.)
-- `file_url` VARCHAR(255) - URL for attached files
-- `sender_id` INTEGER REFERENCES family_members(id) ON DELETE CASCADE - Message sender
-- `conversation_id` INTEGER REFERENCES conversations(id) ON DELETE CASCADE - Parent conversation
-- `created_at` TIMESTAMP WITH TIME ZONE DEFAULT NOW() - Message timestamp
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | INTEGER | PRIMARY KEY, AUTOINCREMENT | Unique identifier |
+| `content` | TEXT | NOT NULL | Message content |
+| `message_type` | VARCHAR(50) | DEFAULT 'text' | Type of message (text, file, image) |
+| `file_url` | VARCHAR(255) | NULLABLE | URL for attached files |
+| `sender_id` | INTEGER | FK → family_members.id, ON DELETE CASCADE | Message sender |
+| `conversation_id` | INTEGER | FK → conversations.id, ON DELETE CASCADE | Parent conversation |
+| `created_at` | DATETIME | DEFAULT NOW | Message timestamp |
 
 ## Table: files
 
 **Purpose**: Stores uploaded file metadata.
 
-**Columns**:
-- `id` SERIAL PRIMARY KEY - Auto-incrementing unique identifier
-- `filename` VARCHAR(255) NOT NULL - Original filename
-- `file_path` VARCHAR(255) NOT NULL - Server file path
-- `file_size` INTEGER NOT NULL - File size in bytes
-- `content_type` VARCHAR(100) NOT NULL - MIME content type
-- `uploaded_by` INTEGER REFERENCES family_members(id) ON DELETE CASCADE - Uploader user ID
-- `uploaded_at` TIMESTAMP WITH TIME ZONE DEFAULT NOW() - Upload timestamp
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | INTEGER | PRIMARY KEY, AUTOINCREMENT | Unique identifier |
+| `filename` | VARCHAR(255) | NOT NULL | Original filename |
+| `file_path` | VARCHAR(255) | NOT NULL | Server file path |
+| `file_size` | INTEGER | NOT NULL | File size in bytes |
+| `content_type` | VARCHAR(100) | NOT NULL | MIME content type |
+| `uploaded_by` | INTEGER | FK → family_members.id, ON DELETE CASCADE | Uploader user ID |
+| `uploaded_at` | DATETIME | DEFAULT NOW | Upload timestamp |
 
 ## Table: projects
 
 **Purpose**: Stores project information.
 
-**Columns**:
-- `id` SERIAL PRIMARY KEY - Auto-incrementing unique identifier
-- `title` VARCHAR(255) NOT NULL - Project title
-- `description` TEXT - Project description
-- `status` VARCHAR(50) DEFAULT 'active' - Project status
-- `created_by` INTEGER REFERENCES family_members(id) ON DELETE CASCADE - Creator user ID
-- `created_at` TIMESTAMP WITH TIME ZONE DEFAULT NOW() - Creation timestamp
-- `updated_at` TIMESTAMP WITH TIME ZONE DEFAULT NOW() - Last update timestamp
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | INTEGER | PRIMARY KEY, AUTOINCREMENT | Unique identifier |
+| `title` | VARCHAR(255) | NOT NULL | Project title |
+| `description` | TEXT | NULLABLE | Project description |
+| `status` | VARCHAR(50) | DEFAULT 'active' | Project status |
+| `created_by` | INTEGER | FK → family_members.id, ON DELETE CASCADE | Creator user ID |
+| `created_at` | DATETIME | DEFAULT NOW | Creation timestamp |
+| `updated_at` | DATETIME | DEFAULT NOW, ON UPDATE | Last update timestamp |
+| `deleted_at` | DATETIME | NULLABLE | Soft delete timestamp |
 
-## Table: family_member_conversations
+## Table: tasks
 
-**Purpose**: Many-to-many relationship between users and conversations.
+**Purpose**: Stores task information for project management.
 
-**Columns**:
-- `family_member_id` INTEGER REFERENCES family_members(id) ON DELETE CASCADE
-- `conversation_id` INTEGER REFERENCES conversations(id) ON DELETE CASCADE
-- PRIMARY KEY (family_member_id, conversation_id)
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | INTEGER | PRIMARY KEY, AUTOINCREMENT | Unique identifier |
+| `title` | VARCHAR(255) | NOT NULL | Task title |
+| `description` | TEXT | NULLABLE | Task description |
+| `status` | VARCHAR(50) | DEFAULT 'pending' | Task status |
+| `assigned_to` | INTEGER | FK → family_members.id, ON DELETE SET NULL | Assigned user |
+| `created_by` | INTEGER | FK → family_members.id, ON DELETE CASCADE | Creator user ID |
+| `created_at` | DATETIME | DEFAULT NOW | Creation timestamp |
+| `updated_at` | DATETIME | DEFAULT NOW, ON UPDATE | Last update timestamp |
 
-## Indexes
+## Table: announcements
 
-- `idx_family_members_username` ON family_members(username) - For faster username lookups
+**Purpose**: Stores system announcements.
 
-## Required Database Updates
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | INTEGER | PRIMARY KEY, AUTOINCREMENT | Unique identifier |
+| `title` | VARCHAR(255) | NOT NULL | Announcement title |
+| `content` | TEXT | NOT NULL | Announcement content |
+| `created_by` | INTEGER | FK → family_members.id, ON DELETE CASCADE | Creator user ID |
+| `created_at` | DATETIME | DEFAULT NOW | Creation timestamp |
 
-To fix user registration and enable full functionality, run these SQL commands in your Supabase SQL editor:
+## Table: role_requests
 
-```sql
--- Add missing columns to family_members table
-ALTER TABLE family_members ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'user';
-ALTER TABLE family_members ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(255);
-ALTER TABLE family_members ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
-ALTER TABLE family_members ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';
+**Purpose**: Stores role upgrade requests from users.
 
--- Create missing tables
-CREATE TABLE IF NOT EXISTS role_requests (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES family_members(id) ON DELETE CASCADE,
-    current_role VARCHAR(50),
-    requested_role VARCHAR(50) NOT NULL,
-    status VARCHAR(20) DEFAULT 'pending',
-    requested_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    approved_at TIMESTAMP WITH TIME ZONE,
-    approved_by INTEGER REFERENCES family_members(id),
-    admin_notes TEXT,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | INTEGER | PRIMARY KEY, AUTOINCREMENT | Unique identifier |
+| `user_id` | INTEGER | FK → family_members.id, ON DELETE CASCADE | Requesting user |
+| `current_role` | VARCHAR(50) | NULLABLE | Current role |
+| `requested_role` | VARCHAR(50) | NOT NULL | Requested role |
+| `status` | VARCHAR(20) | DEFAULT 'pending' | Request status |
+| `requested_at` | DATETIME | DEFAULT NOW | Request timestamp |
+| `approved_at` | DATETIME | NULLABLE | Approval timestamp |
+| `approved_by` | INTEGER | FK → family_members.id | Approving admin |
+| `admin_notes` | TEXT | NULLABLE | Admin notes |
+| `updated_at` | DATETIME | DEFAULT NOW, ON UPDATE | Last update |
 
-CREATE TABLE IF NOT EXISTS deleted_projects (
-    id SERIAL PRIMARY KEY,
-    original_project_id INTEGER,
-    title VARCHAR(255),
-    description TEXT,
-    created_by INTEGER,
-    deleted_by INTEGER REFERENCES family_members(id),
-    deleted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+## Table: deleted_projects
 
-CREATE TABLE IF NOT EXISTS admin_audit_log (
-    id SERIAL PRIMARY KEY,
-    admin_id INTEGER REFERENCES family_members(id) ON DELETE CASCADE,
-    action_type VARCHAR(100) NOT NULL,
-    target_type VARCHAR(50) NOT NULL,
-    target_id VARCHAR(255) NOT NULL,
-    old_values JSONB,
-    new_values JSONB,
-    action_timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+**Purpose**: Archive of soft-deleted projects.
 
-CREATE TABLE IF NOT EXISTS role_definitions (
-    id SERIAL PRIMARY KEY,
-    role_name VARCHAR(50) UNIQUE NOT NULL,
-    description TEXT,
-    permissions JSONB,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | INTEGER | PRIMARY KEY, AUTOINCREMENT | Unique identifier |
+| `original_project_id` | INTEGER | | Original project ID |
+| `title` | VARCHAR(255) | | Project title |
+| `description` | TEXT | NULLABLE | Project description |
+| `created_by` | INTEGER | NULLABLE | Original creator |
+| `deleted_by` | INTEGER | FK → family_members.id | Deleting admin |
+| `deleted_at` | DATETIME | DEFAULT NOW | Deletion timestamp |
 
--- Insert default roles
-INSERT INTO role_definitions (role_name, description, permissions) VALUES
-('admin', 'Full system administrator', '{"all": true}'),
-('user', 'Regular user', '{"read": true, "write": true}'),
-('animator', 'Animation specialist', '{"read": true, "write": true, "animate": true}')
-ON CONFLICT (role_name) DO NOTHING;
-```
+## Table: admin_audit_log
 
-## Registration Process Requirements
+**Purpose**: Audit log for admin actions.
 
-For successful user registration, the following fields must be provided and stored:
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | INTEGER | PRIMARY KEY, AUTOINCREMENT | Unique identifier |
+| `admin_id` | INTEGER | FK → family_members.id, ON DELETE CASCADE | Acting admin |
+| `action_type` | VARCHAR(100) | NOT NULL | Type of action |
+| `target_type` | VARCHAR(50) | NOT NULL | Target entity type |
+| `target_id` | VARCHAR(255) | NOT NULL | Target entity ID |
+| `old_values` | TEXT | NULLABLE | JSON of old values |
+| `new_values` | TEXT | NULLABLE | JSON of new values |
+| `action_timestamp` | DATETIME | DEFAULT NOW | Action timestamp |
 
-**Required Fields**:
-- username (unique)
-- email (unique)
-- full_name
-- hashed_password
+## Table: role_definitions
 
-**Optional Fields**:
-- phone
-- role (defaults to 'user')
-- avatar_url
-- is_active (defaults to true)
-- is_online (defaults to false)
+**Purpose**: Defines available roles and their permissions.
 
-**Auto-generated Fields**:
-- id (auto-increment)
-- created_at (current timestamp)
-- updated_at (current timestamp)
-- last_seen (null initially)
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | INTEGER | PRIMARY KEY, AUTOINCREMENT | Unique identifier |
+| `role_name` | VARCHAR(50) | UNIQUE, NOT NULL | Role name |
+| `description` | TEXT | NULLABLE | Role description |
+| `permissions` | TEXT | NULLABLE | JSON of permissions |
+| `is_active` | BOOLEAN | DEFAULT TRUE | Role active status |
+| `created_at` | DATETIME | DEFAULT NOW | Creation timestamp |

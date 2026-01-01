@@ -1,10 +1,22 @@
+# Core
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
+
+# Database
 sqlalchemy==1.4.53
 alembic==1.12.1
+
+# Authentication
 passlib[bcrypt]==1.7.4
 python-jose[cryptography]==3.3.0
+
+# Utilities
 python-multipart==0.0.6
 python-decouple==3.8
+python-dotenv==1.0.0
+
+# Production
 gunicorn==21.2.0
+
+# WebSocket support (future)
 websockets>=12.0

@@ -1,39 +1,57 @@
-import sqlite3
+"""
+SQLAlchemy Database Configuration
+"""
 import os
-from typing import Optional
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
-# SQLite database configuration
+# SQLite database path
 DATABASE_PATH = os.path.join(os.path.dirname(__file__), 'the_greatest.db')
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
 
-def get_db_connection():
-    """Get a SQLite database connection"""
-    try:
-        conn = sqlite3.connect(DATABASE_PATH)
-        conn.row_factory = sqlite3.Row  # Enable column access by name
-        return conn
-    except Exception as e:
-        print(f"Failed to connect to SQLite database: {e}")
-        raise
+# Create engine with SQLite-specific settings
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False}  # Needed for SQLite
+)
 
-def test_sqlite_connection():
-    """Test SQLite database connection"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM family_members")
-        count = cursor.fetchone()[0]
-        print(f"Successfully connected to SQLite database. Users count: {count}")
-        conn.close()
-        return True
-    except Exception as e:
-        print(f"Failed to connect to SQLite database: {e}")
-        return False
+# Session factory
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Base class for ORM models
+Base = declarative_base()
+
 
 def get_db():
-    """Get the database connection (for compatibility with existing routers)"""
-    return get_db_connection()
+    """
+    Dependency that provides a database session.
+    Usage: db: Session = Depends(get_db)
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-# For backward compatibility
-def get_supabase_client():
-    """Backward compatibility function that returns SQLite connection"""
-    return get_db_connection()
+
+def init_db():
+    """
+    Initialize database tables from ORM models.
+    Call this on startup if tables don't exist.
+    """
+    from models import Base as ModelsBase
+    ModelsBase.metadata.create_all(bind=engine)
+
+
+def test_connection():
+    """Test database connectivity"""
+    try:
+        db = SessionLocal()
+        db.execute("SELECT 1")
+        db.close()
+        print("✓ Database connection successful")
+        return True
+    except Exception as e:
+        print(f"✗ Database connection failed: {e}")
+        return False
