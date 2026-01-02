@@ -3,9 +3,8 @@ SQLAlchemy Database Configuration
 Supports SQLite for local development and PostgreSQL for production (Render)
 """
 import os
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker, declarative_base
 
 # Check for DATABASE_URL (PostgreSQL on Render) first, fallback to SQLite
 DATABASE_URL = os.environ.get("DATABASE_URL")
@@ -64,7 +63,7 @@ def test_connection():
     """Test database connectivity"""
     try:
         db = SessionLocal()
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
         db.close()
         print("✓ Database connection successful")
         return True
