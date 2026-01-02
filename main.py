@@ -63,15 +63,10 @@ def on_startup():
 
 
 def create_default_admin():
-    """Create default admin user from environment variables"""
-    admin_email = config("DEFAULT_ADMIN_EMAIL", default="")
-    admin_password = config("DEFAULT_ADMIN_PASSWORD", default="")
+    """Create default admin user from environment variables or use defaults"""
+    admin_email = config("DEFAULT_ADMIN_EMAIL", default="admin@thegreatest.app")
+    admin_password = config("DEFAULT_ADMIN_PASSWORD", default="11111111")
     admin_username = config("DEFAULT_ADMIN_USERNAME", default="admin")
-    
-    if not admin_email or not admin_password:
-        print("⚠ No default admin credentials set in environment. Skipping admin creation.")
-        print("  Set DEFAULT_ADMIN_EMAIL and DEFAULT_ADMIN_PASSWORD to create a default admin.")
-        return
     
     db = SessionLocal()
     try:
