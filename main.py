@@ -40,7 +40,8 @@ app.add_middleware(
         "http://127.0.0.1:3004",
         "http://127.0.0.1:3005",
         "http://127.0.0.1:5173", # Standard Vite port
-        config("FRONTEND_URL", default="https://the-greatestsite-v4qt.vercel.app"),
+        "https://the-greatestsite.vercel.app",  # Production frontend
+        config("FRONTEND_URL", default="https://the-greatestsite.vercel.app"),
     ],
     allow_credentials=True,
     allow_methods=["*"],
