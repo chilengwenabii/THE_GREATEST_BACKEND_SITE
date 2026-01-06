@@ -19,6 +19,7 @@ from auth import get_password_hash
 app = FastAPI(title="The Greatest API", version="2.0.0")
 
 # CORS configuration
+allowed_origins_env = config("ALLOWED_ORIGINS", default="")
 origins = [
     "http://localhost:3000",
     "http://localhost:3001",
@@ -26,21 +27,13 @@ origins = [
     "http://localhost:3003",
     "http://localhost:3004",
     "http://localhost:3005",
-    "http://localhost:3006",
-    "http://localhost:3007",
-    "http://localhost:3008",
-    "http://localhost:3009",
-    "http://localhost:3010",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:3001",
-    "http://127.0.0.1:3002",
-    "http://127.0.0.1:3003",
-    "http://127.0.0.1:3004",
-    "http://127.0.0.1:3005",
-    "http://127.0.0.1:5173",
+    "http://localhost:5173",
     "https://the-greatestsite.vercel.app",
     config("FRONTEND_URL", default="https://the-greatestsite.vercel.app"),
 ]
+
+if allowed_origins_env:
+    origins.extend([o.strip() for o in allowed_origins_env.split(",")])
 
 app.add_middleware(
     CORSMiddleware,
@@ -141,6 +134,9 @@ app.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
 app.include_router(files.router, prefix="/api/v1/files", tags=["files"])
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
+
+from routers import live_calling
+app.include_router(live_calling.router, tags=["signaling"])
 
 
 # =============================================================================
