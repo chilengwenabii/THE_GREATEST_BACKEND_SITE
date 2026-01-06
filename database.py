@@ -19,7 +19,7 @@ if DATABASE_URL:
         DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
     
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
-    print("✓ Using PostgreSQL database")
+    print("[OK] Using PostgreSQL database")
 else:
     # Local development: SQLite
     DATABASE_PATH = os.path.join(os.path.dirname(__file__), 'the_greatest.db')
@@ -29,7 +29,7 @@ else:
         SQLALCHEMY_DATABASE_URL,
         connect_args={"check_same_thread": False}  # Needed for SQLite
     )
-    print("✓ Using SQLite database (local development)")
+    print("[OK] Using SQLite database (local development)")
 
 # Session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -65,8 +65,8 @@ def test_connection():
         db = SessionLocal()
         db.execute(text("SELECT 1"))
         db.close()
-        print("✓ Database connection successful")
+        print("[OK] Database connection successful")
         return True
     except Exception as e:
-        print(f"✗ Database connection failed: {e}")
+        print(f"[FAIL] Database connection failed: {e}")
         return False

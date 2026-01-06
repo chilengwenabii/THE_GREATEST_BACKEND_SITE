@@ -4,6 +4,7 @@ Files Router: File upload and management endpoints
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from typing import Optional
 import os
 import shutil
 from datetime import datetime
@@ -21,11 +22,12 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 @router.post("/upload")
 def upload_file(
     file: UploadFile = File(...),
+    task_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: FamilyMember = Depends(get_current_user)
 ):
     """Upload a file"""
-    # Validate file size (max 10MB)
+    # ... (validation logic remains same)
     file.file.seek(0, 2)
     file_size = file.file.tell()
     file.file.seek(0)
@@ -48,7 +50,8 @@ def upload_file(
         file_path=file_path,
         file_size=file_size,
         content_type=file.content_type,
-        uploaded_by=current_user.id
+        uploaded_by=current_user.id,
+        task_id=task_id
     )
     db.add(db_file)
     db.commit()
@@ -64,7 +67,7 @@ def upload_file(
     }
 
 
-@router.get("/files")
+@router.get("/")
 def get_files(
     db: Session = Depends(get_db),
     current_user: FamilyMember = Depends(get_current_user)
@@ -84,7 +87,7 @@ def get_files(
     ]
 
 
-@router.get("/files/{file_id}")
+@router.get("/{file_id}")
 def download_file(
     file_id: int,
     db: Session = Depends(get_db),
@@ -108,7 +111,7 @@ def download_file(
     )
 
 
-@router.delete("/files/{file_id}")
+@router.delete("/{file_id}")
 def delete_file(
     file_id: int,
     db: Session = Depends(get_db),

@@ -68,6 +68,34 @@ class AuditLogResponse(BaseModel):
     new_values: Optional[str] = None
     action_timestamp: datetime
 
+
+class AuditLogResponse(BaseModel):
+    id: int
+    admin_id: int
+    action_type: str
+    target_type: str
+    target_id: str
+    old_values: Optional[str] = None
+    new_values: Optional[str] = None
+    action_timestamp: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AdminMessageResponse(BaseModel):
+    id: int
+    content: str
+    message_type: str
+    file_url: Optional[str] = None
+    sender_id: int
+    sender_username: str
+    sender_full_name: str
+    conversation_id: int
+    conversation_title: Optional[str] = None
+    reply_to_id: Optional[int] = None
+    created_at: datetime
+
     class Config:
         from_attributes = True
 
@@ -320,18 +348,23 @@ def update_user(
 @router.delete("/users/{user_id}")
 def delete_user(
     user_id: int,
+    hard_delete: bool = False,
     current_admin: FamilyMember = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Soft delete user (deactivate)"""
+    """Delete user (soft delete by default, hard delete if requested)"""
     user = db.query(FamilyMemberORM).filter(FamilyMemberORM.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    user.is_active = False
-    db.commit()
-    
-    return {"message": "User deleted successfully"}
+    if hard_delete:
+        db.delete(user)
+        db.commit()
+        return {"message": "User permanently deleted from system"}
+    else:
+        user.is_active = False
+        db.commit()
+        return {"message": "User account deactivated (soft delete)"}
 
 
 # =============================================================================
@@ -401,6 +434,75 @@ def get_dashboard_stats(
         "total_files": total_files,
         "storage_used": f"{storage_percent}%"
     }
+
+
+# =============================================================================
+# Chat Management (Admin)
+# =============================================================================
+
+@router.get("/messages/count")
+def get_messages_count(
+    current_admin: FamilyMember = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Get total message count"""
+    from models import MessageORM
+    count = db.query(MessageORM).count()
+    return {"count": count}
+
+
+@router.get("/messages", response_model=List[AdminMessageResponse])
+def get_all_messages(
+    skip: int = 0,
+    limit: int = 100,
+    current_admin: FamilyMember = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Get all messages with details"""
+    from models import MessageORM, ConversationORM
+    
+    # Query messages with joined relations
+    messages = db.query(MessageORM).order_by(MessageORM.created_at.desc()).offset(skip).limit(limit).all()
+    
+    result = []
+    for msg in messages:
+        sender = db.query(FamilyMemberORM).filter(FamilyMemberORM.id == msg.sender_id).first()
+        conversation = db.query(ConversationORM).filter(ConversationORM.id == msg.conversation_id).first()
+        
+        result.append(AdminMessageResponse(
+            id=msg.id,
+            content=msg.content,
+            message_type=msg.message_type,
+            file_url=msg.file_url,
+            sender_id=msg.sender_id,
+            sender_username=sender.username if sender else "Unknown",
+            sender_full_name=sender.full_name if sender else "Unknown User",
+            conversation_id=msg.conversation_id,
+            conversation_title=conversation.title if conversation else None,
+            reply_to_id=msg.reply_to_id,
+            created_at=msg.created_at
+        ))
+    
+    return result
+
+
+@router.delete("/messages/{message_id}")
+def admin_delete_message(
+    message_id: int,
+    current_admin: FamilyMember = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Hard delete a message (admin)"""
+    from models import MessageORM
+    
+    msg = db.query(MessageORM).filter(MessageORM.id == message_id).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    
+    db.delete(msg)
+    db.commit()
+    
+    return {"message": "Message deleted successfully"}
 # =============================================================================
 # Health & Diagnostics
 # =============================================================================

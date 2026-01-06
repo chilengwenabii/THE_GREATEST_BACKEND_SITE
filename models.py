@@ -1,8 +1,8 @@
 """
 SQLAlchemy ORM Models and Pydantic Schemas
 """
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Float
+from sqlalchemy.orm import relationship, backref
 from sqlalchemy.sql import func
 from database import Base
 from pydantic import BaseModel
@@ -40,6 +40,7 @@ class FamilyMemberORM(Base):
     files = relationship("FileORM", back_populates="uploader")
     projects = relationship("ProjectORM", back_populates="creator")
     messages = relationship("MessageORM", back_populates="sender")
+    tasks_assigned_multiple = relationship("TaskAssigneeORM", back_populates="user")
 
 
 class ConversationORM(Base):
@@ -54,6 +55,8 @@ class ConversationORM(Base):
     # Relationships
     messages = relationship("MessageORM", back_populates="conversation")
     participants = relationship("ConversationParticipantORM", back_populates="conversation")
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=True)
+    project = relationship("ProjectORM")
 
 
 class ConversationParticipantORM(Base):
@@ -78,11 +81,28 @@ class MessageORM(Base):
     file_url = Column(String(255), nullable=True)
     sender_id = Column(Integer, ForeignKey("family_members.id", ondelete="CASCADE"))
     conversation_id = Column(Integer, ForeignKey("conversations.id", ondelete="CASCADE"))
+    reply_to_id = Column(Integer, ForeignKey("messages.id"), nullable=True)
+    deleted_for_ids = Column(Text, nullable=True)  # Comma-separated user IDs
+    is_read = Column(Boolean, default=False)
     created_at = Column(DateTime, server_default=func.now())
 
     # Relationships
-    sender = relationship("FamilyMemberORM", back_populates="messages")
+    sender = relationship("FamilyMemberORM", foreign_keys=[sender_id], back_populates="messages")
     conversation = relationship("ConversationORM", back_populates="messages")
+    replies = relationship("MessageORM", backref=backref('parent', remote_side=[id]))
+
+
+class AnnouncementReadORM(Base):
+    """Track read status of announcements"""
+    __tablename__ = "announcement_reads"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("family_members.id", ondelete="CASCADE"), nullable=False)
+    announcement_id = Column(Integer, ForeignKey("announcements.id", ondelete="CASCADE"), nullable=False)
+    read_at = Column(DateTime, server_default=func.now())
+
+    user = relationship("FamilyMemberORM")
+    announcement = relationship("AnnouncementORM")
 
 
 class FileORM(Base):
@@ -95,10 +115,13 @@ class FileORM(Base):
     file_size = Column(Integer, nullable=False)
     content_type = Column(String(100), nullable=False)
     uploaded_by = Column(Integer, ForeignKey("family_members.id", ondelete="CASCADE"))
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=True)
+    task_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=True)
     uploaded_at = Column(DateTime, server_default=func.now())
 
     # Relationships
     uploader = relationship("FamilyMemberORM", back_populates="files")
+    project = relationship("ProjectORM", back_populates="files")
 
 
 class ProjectORM(Base):
@@ -109,14 +132,20 @@ class ProjectORM(Base):
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     status = Column(String(50), default="active")
+    priority = Column(String(20), default="medium")
+    deadline = Column(DateTime, nullable=True)
+    tags = Column(String(255), nullable=True) # Comma-separated tags
+    progress = Column(Integer, default=0)
     created_by = Column(Integer, ForeignKey("family_members.id", ondelete="CASCADE"))
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     deleted_at = Column(DateTime, nullable=True)
     submission_link = Column(String(500), nullable=True)
+    external_links = Column(Text, nullable=True) # Store as JSON string
 
     # Relationships
     creator = relationship("FamilyMemberORM", back_populates="projects")
+    files = relationship("FileORM", back_populates="project")
 
 
 class TaskORM(Base):
@@ -129,12 +158,73 @@ class TaskORM(Base):
     status = Column(String(50), default="pending")
     assigned_to = Column(Integer, ForeignKey("family_members.id", ondelete="SET NULL"), nullable=True)
     created_by = Column(Integer, ForeignKey("family_members.id", ondelete="CASCADE"))
+    deadline = Column(DateTime, nullable=True)
+    links = Column(Text, nullable=True)  # JSON string or newline separated
+    priority = Column(String(20), default="medium")
+    is_approved = Column(Boolean, default=True)
+    alert_count = Column(Integer, default=0)
+    estimated_days = Column(Integer, nullable=True)
+    timeline_confirmed_at = Column(DateTime, nullable=True)
+    timeline_notes = Column(Text, nullable=True)
+    proposed_deadline = Column(DateTime, nullable=True)
+    timeline_status = Column(String(50), default="pending") # pending, confirmed, rejected
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    progress = Column(Integer, default=0)
+    estimated_hours = Column(Float, nullable=True)
+    actual_hours = Column(Float, nullable=True)
+    tags = Column(String(255), nullable=True)
+    is_private = Column(Boolean, default=False)
+    parent_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=True)
+    team_id = Column(String(50), nullable=True)
 
     # Relationships
     creator = relationship("FamilyMemberORM", back_populates="tasks_created", foreign_keys=[created_by])
     assigned_user = relationship("FamilyMemberORM", back_populates="tasks_assigned", foreign_keys=[assigned_to])
+    assignees = relationship("TaskAssigneeORM", back_populates="task", cascade="all, delete-orphan")
+    progress_updates = relationship("TaskUpdateORM", back_populates="task", cascade="all, delete-orphan")
+    sub_tasks = relationship("TaskORM", backref=backref('parent', remote_side=[id]))
+    dependency_refs = relationship("TaskDependencyORM", foreign_keys="[TaskDependencyORM.task_id]", back_populates="task_obj", cascade="all, delete-orphan")
+
+
+class TaskAssigneeORM(Base):
+    """Junction table for multiple assignees on a task"""
+    __tablename__ = "task_assignees"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("family_members.id", ondelete="CASCADE"), nullable=False)
+    assigned_at = Column(DateTime, server_default=func.now())
+
+    task = relationship("TaskORM", back_populates="assignees")
+    user = relationship("FamilyMemberORM")
+
+
+class TaskDependencyORM(Base):
+    """Junction table for task dependencies"""
+    __tablename__ = "task_dependencies"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
+    depends_on_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
+
+    task_obj = relationship("TaskORM", foreign_keys=[task_id], back_populates="dependency_refs")
+    dependency_obj = relationship("TaskORM", foreign_keys=[depends_on_id])
+
+
+class TaskUpdateORM(Base):
+    """Daily Task Progress Updates"""
+    __tablename__ = "task_updates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"))
+    user_id = Column(Integer, ForeignKey("family_members.id", ondelete="CASCADE"))
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+
+    task = relationship("TaskORM", back_populates="progress_updates")
+    user = relationship("FamilyMemberORM")
 
 
 class AnnouncementORM(Base):
@@ -257,6 +347,7 @@ class UserResponse(BaseModel):
     role: str
     is_online: bool
     last_seen: Optional[datetime] = None
+    avatar_url: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -268,6 +359,11 @@ class TaskBase(BaseModel):
     description: Optional[str] = None
     status: str = "pending"
     assigned_to: Optional[int] = None
+    priority: str = "medium"
+    links: Optional[str] = None
+    estimated_days: Optional[int] = None
+    timeline_confirmed_at: Optional[datetime] = None
+    assigned_user_ids: List[int] = []
 
 
 class TaskCreate(TaskBase):
@@ -279,6 +375,11 @@ class TaskUpdate(BaseModel):
     description: Optional[str] = None
     status: Optional[str] = None
     assigned_to: Optional[int] = None
+    priority: Optional[str] = None
+    links: Optional[str] = None
+    estimated_days: Optional[int] = None
+    timeline_confirmed_at: Optional[datetime] = None
+    assigned_user_ids: Optional[List[int]] = None
 
 
 class Task(TaskBase):
@@ -286,6 +387,9 @@ class Task(TaskBase):
     created_by: int
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    priority: str = "medium"
+    links: Optional[str] = None
+    assignees: List[dict] = []
 
     class Config:
         from_attributes = True
@@ -332,6 +436,10 @@ class ProjectCreate(BaseModel):
     title: str
     description: str = ""
     status: str = "active"
+    priority: str = "medium"
+    deadline: Optional[datetime] = None
+    tags: Optional[str] = None
+    progress: int = 0
 
 
 class ProjectUpdate(BaseModel):
@@ -345,6 +453,10 @@ class Project(BaseModel):
     title: str
     description: Optional[str] = None
     status: str
+    priority: str = "medium"
+    deadline: Optional[datetime] = None
+    tags: Optional[str] = None
+    progress: int = 0
     created_by: int
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

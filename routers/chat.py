@@ -31,6 +31,7 @@ class MessageCreate(BaseModel):
     conversation_id: int
     message_type: str = "text"
     file_url: Optional[str] = None
+    reply_to_id: Optional[int] = None
 
 
 class MessageResponse(BaseModel):
@@ -41,6 +42,7 @@ class MessageResponse(BaseModel):
     sender_id: int
     sender_username: str
     conversation_id: int
+    reply_to_id: Optional[int] = None
     created_at: datetime
 
     class Config:
@@ -175,6 +177,7 @@ def get_conversations(
                 sender_id=msg.sender_id,
                 sender_username=sender.username if sender else "Unknown",
                 conversation_id=msg.conversation_id,
+                reply_to_id=msg.reply_to_id,
                 created_at=msg.created_at
             ))
         
@@ -218,6 +221,7 @@ def send_message(
         file_url=msg.file_url,
         sender_id=current_user.id,
         conversation_id=msg.conversation_id,
+        reply_to_id=msg.reply_to_id,
         created_at=datetime.utcnow()
     )
     db.add(db_msg)
@@ -239,6 +243,7 @@ def send_message(
         sender_id=db_msg.sender_id,
         sender_username=sender.username if sender else "Unknown",
         conversation_id=db_msg.conversation_id,
+        reply_to_id=db_msg.reply_to_id,
         created_at=db_msg.created_at
     )
 
@@ -265,9 +270,16 @@ def get_messages(
         raise HTTPException(status_code=403, detail="Not authorized to view this conversation")
     
     # Get messages
-    messages = db.query(MessageORM).filter(
+    all_messages = db.query(MessageORM).filter(
         MessageORM.conversation_id == conversation_id
     ).order_by(MessageORM.created_at).all()
+    
+    # Filter out messages deleted for this user
+    messages = []
+    for m in all_messages:
+        deleted_ids = m.deleted_for_ids.split(",") if m.deleted_for_ids else []
+        if str(current_user.id) not in deleted_ids:
+            messages.append(m)
     
     result = []
     for msg in messages:
@@ -280,10 +292,60 @@ def get_messages(
             sender_id=msg.sender_id,
             sender_username=sender.username if sender else "Unknown",
             conversation_id=msg.conversation_id,
+            reply_to_id=msg.reply_to_id,
             created_at=msg.created_at
         ))
     
     return result
+
+
+@router.delete("/messages/{message_id}")
+def delete_message(
+    message_id: int,
+    delete_type: str = "for_me",  # 'for_me' or 'for_all'
+    current_user: FamilyMember = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a message"""
+    msg = db.query(MessageORM).filter(MessageORM.id == message_id).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    # verify user is part of the conversation
+    participant = db.query(ConversationParticipantORM).filter(
+        ConversationParticipantORM.conversation_id == msg.conversation_id,
+        ConversationParticipantORM.user_id == current_user.id
+    ).first()
+    
+    if not participant:
+         raise HTTPException(status_code=403, detail="Not authorized")
+
+    if delete_type == "for_all":
+        # Only sender can delete for all
+        if msg.sender_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Only sender can delete for everyone")
+        
+        # Hard delete or Mark as deleted? 
+        # Requirement says "delete sms if sender has select sms he can delete for all"
+        # We will delete the record to be clean, or we could mark content as "Deleted"
+        # Let's hard delete for now as per "delete for all" usually implies removal.
+        # However, to avoid breaking reply chains or "phantom" messages, often we just set content to "[Deleted]" or remove it.
+        # But commonly "Delete for all" removes the row if we don't care about history.
+        # Let's remove the row.
+        db.delete(msg)
+        db.commit()
+        return {"status": "deleted_for_all"}
+
+    elif delete_type == "for_me":
+        # Add user ID to deleted_for_ids
+        current_deleted_ids = msg.deleted_for_ids.split(",") if msg.deleted_for_ids else []
+        if str(current_user.id) not in current_deleted_ids:
+            current_deleted_ids.append(str(current_user.id))
+            msg.deleted_for_ids = ",".join(current_deleted_ids)
+            db.commit()
+        return {"status": "deleted_for_me"}
+    
+    raise HTTPException(status_code=400, detail="Invalid delete_type")
 @router.get("/team-conversation", response_model=ConversationResponse)
 def get_or_create_team_conversation(
     current_user: FamilyMember = Depends(get_current_user),
@@ -365,6 +427,7 @@ def get_or_create_team_conversation(
             sender_id=msg.sender_id,
             sender_username=sender.username if sender else "Unknown",
             conversation_id=msg.conversation_id,
+            reply_to_id=msg.reply_to_id,
             created_at=msg.created_at
         ))
         

@@ -1,39 +1,41 @@
-#!/usr/bin/env python3
-"""
-Test script to check backend startup and Supabase connection
-"""
-
 import sys
 import os
+import traceback
 
-# Add current directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add the current directory to sys.path to allow importing from it
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    print("Testing backend imports...")
-
+    print("[INFO] Starting backend startup test...")
+    
     # Test database import
-    from database import engine, Base, test_supabase_connection
-    print("✓ Database module imported successfully")
+    import database
+    from database import test_connection
+    print("[OK] Database module imported successfully")
 
-    # Test Supabase connection
-    print("Testing Supabase connection...")
-    test_supabase_connection()
+    # Test models import
+    import models
+    print("[OK] Models module imported successfully")
 
     # Test main app import
     from main import app
-    print("✓ Main app imported successfully")
+    print("[OK] Main app imported successfully")
 
     # Test routers import
-    from routers import auth, chat, files, projects, users
-    print("✓ All routers imported successfully")
+    from routers import auth, chat, files, projects, users, tasks, announcements, admin, search, analytics
+    print("[OK] All routers imported successfully")
 
-    print("\n🎉 Backend startup test completed successfully!")
-    print("The backend should run locally without issues.")
+    if test_connection():
+        print("[OK] Database connection successful")
+    else:
+        print("[FAIL] Database connection failed")
 
+    print("[DONE] Startup test completed successfully")
 except ImportError as e:
-    print(f"❌ Import error: {e}")
+    print(f"[ERROR] Import error: {e}")
+    traceback.print_exc()
     sys.exit(1)
 except Exception as e:
-    print(f"❌ Error during startup test: {e}")
+    print(f"[ERROR] Error during startup test: {e}")
+    traceback.print_exc()
     sys.exit(1)

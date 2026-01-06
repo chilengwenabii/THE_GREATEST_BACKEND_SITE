@@ -153,6 +153,16 @@ def get_online_users_count(db: Session = Depends(get_db)):
     return {"online_users": count}
 
 
+@router.get("/all", response_model=list[UserAdminResponse])
+def get_all_users_for_team(
+    current_user: FamilyMember = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all users for team page (regular users can view)"""
+    users = db.query(FamilyMemberORM).all()
+    return [UserAdminResponse.model_validate(u) for u in users]
+
+
 @router.post("/logout")
 def logout(
     current_user: FamilyMember = Depends(get_current_user),

@@ -18,35 +18,58 @@ from auth import get_password_hash
 
 app = FastAPI(title="The Greatest API", version="2.0.0")
 
-# CORS middleware
+# CORS configuration
+origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:3002",
+    "http://localhost:3003",
+    "http://localhost:3004",
+    "http://localhost:3005",
+    "http://localhost:3006",
+    "http://localhost:3007",
+    "http://localhost:3008",
+    "http://localhost:3009",
+    "http://localhost:3010",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+    "http://127.0.0.1:3002",
+    "http://127.0.0.1:3003",
+    "http://127.0.0.1:3004",
+    "http://127.0.0.1:3005",
+    "http://127.0.0.1:5173",
+    "https://the-greatestsite.vercel.app",
+    config("FRONTEND_URL", default="https://the-greatestsite.vercel.app"),
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:3002",
-        "http://localhost:3003",
-        "http://localhost:3004",
-        "http://localhost:3005",
-        "http://localhost:3006",
-        "http://localhost:3007",
-        "http://localhost:3008",
-        "http://localhost:3009",
-        "http://localhost:3010",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3001",
-        "http://127.0.0.1:3002",
-        "http://127.0.0.1:3003",
-        "http://127.0.0.1:3004",
-        "http://127.0.0.1:3005",
-        "http://127.0.0.1:5173", # Standard Vite port
-        "https://the-greatestsite.vercel.app",  # Production frontend
-        config("FRONTEND_URL", default="https://the-greatestsite.vercel.app"),
-    ],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+from fastapi import Request
+from fastapi.responses import JSONResponse
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Global error caught: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error", "message": str(exc)},
+        headers={
+            "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
+            "Access-Control-Allow-Credentials": "true",
+        }
+    )
 
 
 # =============================================================================
@@ -77,7 +100,7 @@ def create_default_admin():
         ).first()
         
         if existing:
-            print(f"✓ Admin user '{admin_email}' already exists.")
+            print(f"[OK] Admin user '{admin_email}' already exists.")
             return
         
         # Create admin
@@ -93,9 +116,9 @@ def create_default_admin():
         )
         db.add(admin)
         db.commit()
-        print(f"✓ Default admin '{admin_username}' created successfully.")
+        print(f"[OK] Default admin '{admin_username}' created successfully.")
     except Exception as e:
-        print(f"✗ Error creating default admin: {e}")
+        print(f"[!] Error creating default admin: {e}")
         db.rollback()
     finally:
         db.close()
@@ -105,17 +128,19 @@ def create_default_admin():
 # Include Routers
 # =============================================================================
 
-from routers import auth, chat, files, projects, users, tasks, announcements, admin, search
+from routers import auth, chat, files, projects, users, tasks, announcements, admin, search, analytics, notifications
 
-app.include_router(auth.router, prefix="/auth", tags=["authentication"])
-app.include_router(chat.router, prefix="/chat", tags=["chat"])
-app.include_router(files.router, prefix="/files", tags=["files"])
-app.include_router(projects.router, prefix="/projects", tags=["projects"])
-app.include_router(users.router, prefix="/users", tags=["users"])
-app.include_router(tasks.router, prefix="/tasks", tags=["tasks"])
-app.include_router(announcements.router, prefix="/announcements", tags=["announcements"])
-app.include_router(admin.router, prefix="/admin", tags=["admin"])
-app.include_router(search.router, prefix="/search", tags=["search"])
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
+app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["tasks"])
+app.include_router(projects.router, prefix="/api/v1/projects", tags=["projects"])
+app.include_router(announcements.router, prefix="/api/v1/announcements", tags=["announcements"])
+app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
+app.include_router(search.router, prefix="/api/v1/search", tags=["search"])
+app.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
+app.include_router(files.router, prefix="/api/v1/files", tags=["files"])
+app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
+app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
 
 
 # =============================================================================
@@ -135,7 +160,7 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to The Greatest API", "version": "2.0.0"}
+    return {"message": "VERIFICATION_SUCCESSFUL_THE_GREATEST", "version": "2.0.0"}
 
 
 @app.get("/health")

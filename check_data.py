@@ -13,11 +13,11 @@ def check_data():
     print(f"Number of users in family_members: {count}")
 
     if count > 0:
-        cursor.execute('SELECT id, username, email FROM family_members LIMIT 5')
+        cursor.execute('SELECT id, username, email, role FROM family_members LIMIT 10')
         users = cursor.fetchall()
         print("Sample users:")
         for user in users:
-            print(f"  ID: {user[0]}, Username: {user[1]}, Email: {user[2]}")
+            print(f"  ID: {user[0]}, Username: {user[1]}, Email: {user[2]}, Role: {user[3]}")
 
     conn.close()
 
